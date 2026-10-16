@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatWareki, toSeireki, toWareki, type Era, type Wareki } from "../src/wareki";
+import { formatWareki, fromDate, toSeireki, toWareki, type Era, type SeirekiDate, type Wareki } from "../src/wareki";
 
-/** ローカルタイムの年月日から Date を作る（month は 1 始まり） */
-const d = (year: number, month: number, day: number, hours = 0, minutes = 0, seconds = 0, ms = 0) =>
+/** 西暦の年月日を作る（month は 1 始まり） */
+const d = (year: number, month: number, day: number): SeirekiDate => ({ year, month, day });
+
+/** ローカルタイムの年月日・時刻から Date を作る（month は 1 始まり） */
+const localDate = (year: number, month: number, day: number, hours = 0, minutes = 0, seconds = 0, ms = 0) =>
   new Date(year, month - 1, day, hours, minutes, seconds, ms);
 
 const w = (era: Era, year: number, month: number, day: number): Wareki => ({ era, year, month, day });
@@ -61,43 +64,74 @@ describe("toWareki", () => {
     });
   });
 
-  describe("時刻部分は無視して日付で判定する", () => {
-    it("平成最終日の 23:59:59.999 は平成31年4月30日", () => {
-      expect(toWareki(d(2019, 4, 30, 23, 59, 59, 999))).toEqual(w("平成", 31, 4, 30));
-    });
-
-    it("令和開始日の 00:00:00.000 は令和元年5月1日", () => {
-      expect(toWareki(d(2019, 5, 1, 0, 0, 0, 0))).toEqual(w("令和", 1, 5, 1));
-    });
-
-    it("昭和最終日の正午は昭和64年1月7日", () => {
-      expect(toWareki(d(1989, 1, 7, 12, 0, 0))).toEqual(w("昭和", 64, 1, 7));
-    });
-  });
-
-  it("引数の Date を変更しない", () => {
-    const date = d(2019, 5, 1, 15, 30);
-    const before = date.getTime();
-    toWareki(date);
-    expect(date.getTime()).toBe(before);
-  });
-
   describe("異常系", () => {
     it("大正開始日の前日（1912-07-29）は例外", () => {
       expect(() => toWareki(d(1912, 7, 29))).toThrow(RangeError);
-    });
-
-    it("大正開始日の前日 23:59:59.999 は例外", () => {
-      expect(() => toWareki(d(1912, 7, 29, 23, 59, 59, 999))).toThrow(RangeError);
     });
 
     it("明治の日付（1900-01-01）は例外", () => {
       expect(() => toWareki(d(1900, 1, 1))).toThrow(RangeError);
     });
 
-    it("Invalid Date は例外", () => {
-      expect(() => toWareki(new Date(Number.NaN))).toThrow(RangeError);
+    it.each<[string, SeirekiDate]>([
+      ["2021-02-30（存在しない日付）", d(2021, 2, 30)],
+      ["2021-02-29（うるう年でない年の2月29日）", d(2021, 2, 29)],
+      ["2021-13-01（月が範囲外）", d(2021, 13, 1)],
+      ["2021-01-00（日が0）", d(2021, 1, 0)],
+      ["月が小数", d(2021, 6.5, 1)],
+      ["年が NaN", d(Number.NaN, 6, 1)],
+    ])("%s は例外", (_label, date) => {
+      expect(() => toWareki(date)).toThrow(RangeError);
     });
+
+    it("Date をそのまま渡すと例外（fromDate で変換する必要がある）", () => {
+      expect(() => toWareki(localDate(2020, 1, 1) as unknown as SeirekiDate)).toThrow(RangeError);
+    });
+
+    it("null は例外", () => {
+      expect(() => toWareki(null as unknown as SeirekiDate)).toThrow(RangeError);
+    });
+  });
+});
+
+describe("fromDate", () => {
+  it.each(allCases)("$name: ローカルタイムの年月日を返す", ({ seireki }) => {
+    expect(fromDate(localDate(...seireki))).toEqual(d(...seireki));
+  });
+
+  describe("時刻部分は無視して日付で判定する", () => {
+    it("平成最終日の 23:59:59.999 は 2019-04-30（平成31年4月30日）", () => {
+      const date = fromDate(localDate(2019, 4, 30, 23, 59, 59, 999));
+      expect(date).toEqual(d(2019, 4, 30));
+      expect(toWareki(date)).toEqual(w("平成", 31, 4, 30));
+    });
+
+    it("令和開始日の 00:00:00.000 は 2019-05-01（令和元年5月1日）", () => {
+      const date = fromDate(localDate(2019, 5, 1, 0, 0, 0, 0));
+      expect(date).toEqual(d(2019, 5, 1));
+      expect(toWareki(date)).toEqual(w("令和", 1, 5, 1));
+    });
+
+    it("昭和最終日の正午は 1989-01-07（昭和64年1月7日）", () => {
+      expect(toWareki(fromDate(localDate(1989, 1, 7, 12, 0, 0)))).toEqual(w("昭和", 64, 1, 7));
+    });
+
+    it("大正開始日の前日 23:59:59.999 は 1912-07-29 で、toWareki は例外", () => {
+      const date = fromDate(localDate(1912, 7, 29, 23, 59, 59, 999));
+      expect(date).toEqual(d(1912, 7, 29));
+      expect(() => toWareki(date)).toThrow(RangeError);
+    });
+  });
+
+  it("引数の Date を変更しない", () => {
+    const date = localDate(2019, 5, 1, 15, 30);
+    const before = date.getTime();
+    fromDate(date);
+    expect(date.getTime()).toBe(before);
+  });
+
+  it("Invalid Date は例外", () => {
+    expect(() => fromDate(new Date(Number.NaN))).toThrow(RangeError);
   });
 });
 
@@ -140,45 +174,48 @@ describe("formatWareki", () => {
       expect(() => formatWareki(d(1912, 7, 29))).toThrow(RangeError);
     });
 
-    it("Invalid Date は例外", () => {
-      expect(() => formatWareki(new Date(Number.NaN))).toThrow(RangeError);
+    it("存在しない日付は例外", () => {
+      expect(() => formatWareki(d(2021, 2, 30))).toThrow(RangeError);
     });
   });
 });
 
 describe("toSeireki", () => {
-  /** 返り値がローカルタイムの指定日 0:00:00.000 ちょうどであることを確認する */
-  const expectLocalMidnight = (actual: Date, [year, month, day]: [number, number, number]) => {
-    expect(actual).toBeInstanceOf(Date);
-    expect(actual.getTime()).toBe(d(year, month, day).getTime());
+  /** 返り値が西暦の年月日（時刻を持たない）であることを確認する */
+  const expectSeireki = (actual: SeirekiDate, [year, month, day]: [number, number, number]) => {
+    expect(actual).toStrictEqual(d(year, month, day));
   };
 
   describe("正常系：各元号の代表的な日付", () => {
     it.each(representativeCases)("$name: $text", ({ seireki, wareki }) => {
-      expectLocalMidnight(toSeireki(wareki.era, wareki.year, wareki.month, wareki.day), seireki);
+      expectSeireki(toSeireki(wareki.era, wareki.year, wareki.month, wareki.day), seireki);
     });
   });
 
   describe("境界値：各元号の開始日と最終日", () => {
     it.each(boundaryCases)("$name: $text", ({ seireki, wareki }) => {
-      expectLocalMidnight(toSeireki(wareki.era, wareki.year, wareki.month, wareki.day), seireki);
+      expectSeireki(toSeireki(wareki.era, wareki.year, wareki.month, wareki.day), seireki);
     });
   });
 
   describe("元年と2年の切り替わり", () => {
     it.each(gannenCases)("$name: $text", ({ seireki, wareki }) => {
-      expectLocalMidnight(toSeireki(wareki.era, wareki.year, wareki.month, wareki.day), seireki);
+      expectSeireki(toSeireki(wareki.era, wareki.year, wareki.month, wareki.day), seireki);
     });
   });
 
   describe("うるう年", () => {
     it("令和2年（2020年）2月29日は存在する", () => {
-      expectLocalMidnight(toSeireki("令和", 2, 2, 29), [2020, 2, 29]);
+      expectSeireki(toSeireki("令和", 2, 2, 29), [2020, 2, 29]);
     });
 
     it("平成12年（2000年・400で割り切れる年）2月29日は存在する", () => {
-      expectLocalMidnight(toSeireki("平成", 12, 2, 29), [2000, 2, 29]);
+      expectSeireki(toSeireki("平成", 12, 2, 29), [2000, 2, 29]);
     });
+  });
+
+  it("夏時間が始まる日（1948-05-02、日本では0時が存在しない）もそのまま年月日を返す", () => {
+    expectSeireki(toSeireki("昭和", 23, 5, 2), [1948, 5, 2]);
   });
 
   describe("異常系：元号の範囲外の日付", () => {
@@ -250,6 +287,13 @@ describe("往復変換", () => {
   it.each(allCases)("$name: toSeireki(toWareki(date)) は元の日付に戻る", ({ seireki }) => {
     const date = d(...seireki);
     const { era, year, month, day } = toWareki(date);
-    expect(toSeireki(era, year, month, day).getTime()).toBe(date.getTime());
+    expect(toSeireki(era, year, month, day)).toEqual(date);
+  });
+
+  it("Date から変換しても元の日付に戻る（夏時間が始まる日 1948-05-02 を含む）", () => {
+    for (const seireki of [...allCases.map((c) => c.seireki), [1948, 5, 2] as [number, number, number]]) {
+      const { era, year, month, day } = toWareki(fromDate(localDate(...seireki)));
+      expect(toSeireki(era, year, month, day)).toEqual(d(...seireki));
+    }
   });
 });

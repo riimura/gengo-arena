@@ -2,7 +2,8 @@
  * 和暦⇔西暦変換ライブラリ
  *
  * - 対応元号は 大正・昭和・平成・令和。
- * - Date はローカルタイムの年月日として解釈する（時刻部分は無視する）。
+ * - 西暦の日付は時刻やタイムゾーンを持たない年月日（SeirekiDate）で受け渡しする。
+ *   Date を使う場合は fromDate でローカルタイムの年月日に変換してから渡す。
  * - 不正な入力（範囲外の日付・存在しない日付・0年以下など）には RangeError を投げる。
  *
  * 元号の開始日:
@@ -21,17 +22,19 @@ export interface Wareki {
   day: number;
 }
 
-/** 西暦の年月日（month は 1 始まり） */
-interface YMD {
+/** 西暦の年月日。時刻とタイムゾーンを持たないので、夏時間などの影響を受けない。 */
+export interface SeirekiDate {
   year: number;
+  /** 月（1〜12） */
   month: number;
+  /** 日（1〜31） */
   day: number;
 }
 
 interface EraDef {
   name: Era;
   /** 元号の開始日（この日を含む） */
-  start: YMD;
+  start: SeirekiDate;
 }
 
 /** 開始日の古い順。各元号の終わりは次の元号の開始日の前日。最後の元号（令和）に終わりはない。 */
@@ -42,11 +45,8 @@ const ERAS: readonly EraDef[] = [
   { name: "令和", start: { year: 2019, month: 5, day: 1 } },
 ];
 
-/**
- * 年月日を大小比較できる整数（YYYYMMDD）にする。
- * Date のミリ秒で比較しないことで、時刻・タイムゾーン・夏時間の影響を受けない。
- */
-const toKey = ({ year, month, day }: YMD): number => year * 10000 + month * 100 + day;
+/** 年月日を大小比較できる整数（YYYYMMDD）にする */
+const toKey = ({ year, month, day }: SeirekiDate): number => year * 10000 + month * 100 + day;
 
 const isLeapYear = (year: number): boolean => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 
@@ -63,73 +63,92 @@ const assertInteger = (label: string, value: number): void => {
 };
 
 /**
- * 西暦の日付を和暦に変換する。
- * @throws {RangeError} 大正より前の日付、または不正な Date の場合
+ * 西暦の年月日が実在する日付かを確かめる。
+ * @param text エラーメッセージに出す日付の表記（和暦で入力された場合は和暦で出すため）
  */
-export function toWareki(date: Date): Wareki {
+const assertExistingDate = ({ year, month, day }: SeirekiDate, text: string): void => {
+  assertInteger("年", year);
+  assertInteger("月", month);
+  assertInteger("日", day);
+  if (month < 1 || month > 12) {
+    throw new RangeError(`月は1〜12で指定してください: ${month}`);
+  }
+  if (day < 1 || day > daysInMonth(year, month)) {
+    throw new RangeError(`存在しない日付です: ${text}`);
+  }
+};
+
+/**
+ * Date をローカルタイムの年月日に変換する（時刻部分は無視する）。
+ * 引数の Date は変更しない。
+ * @throws {RangeError} Date でない値、または Invalid Date の場合
+ */
+export function fromDate(date: Date): SeirekiDate {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     throw new RangeError("不正な Date です");
   }
-
-  const ymd: YMD = { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
-  const key = toKey(ymd);
-
-  for (let i = ERAS.length - 1; i >= 0; i--) {
-    const era = ERAS[i];
-    if (key >= toKey(era.start)) {
-      return { era: era.name, year: ymd.year - era.start.year + 1, month: ymd.month, day: ymd.day };
-    }
-  }
-
-  throw new RangeError(`対応範囲外の日付です（大正元年7月30日より前）: ${ymd.year}-${ymd.month}-${ymd.day}`);
+  return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
 }
 
 /**
- * 西暦の日付を和暦文字列に変換する。例: 「令和元年5月1日」
+ * 西暦の年月日を和暦に変換する。
+ * @throws {RangeError} 大正より前の日付、存在しない日付、整数でない値の場合
+ */
+export function toWareki(date: SeirekiDate): Wareki {
+  if (date instanceof Date) {
+    throw new RangeError("Date ではなく { year, month, day } を渡してください（Date は fromDate で変換できます）");
+  }
+  if (typeof date !== "object" || date === null) {
+    throw new RangeError(`不正な日付です: ${String(date)}`);
+  }
+  const { year, month, day } = date;
+  assertExistingDate(date, `${year}-${month}-${day}`);
+
+  const key = toKey(date);
+  for (let i = ERAS.length - 1; i >= 0; i--) {
+    const era = ERAS[i];
+    if (key >= toKey(era.start)) {
+      return { era: era.name, year: year - era.start.year + 1, month, day };
+    }
+  }
+
+  throw new RangeError(`対応範囲外の日付です（大正元年7月30日より前）: ${year}-${month}-${day}`);
+}
+
+/**
+ * 西暦の年月日を和暦文字列に変換する。例: 「令和元年5月1日」
  * 1年は「元年」と表記し、数字は半角・ゼロ埋めなし。
  * @throws {RangeError} toWareki と同じ条件
  */
-export function formatWareki(date: Date): string {
+export function formatWareki(date: SeirekiDate): string {
   const { era, year, month, day } = toWareki(date);
   return `${era}${year === 1 ? "元" : year}年${month}月${day}日`;
 }
 
 /**
- * 和暦を西暦の Date（ローカルタイムの 0時0分0秒）に変換する。
- *
- * 注意: 夏時間が始まる日など、ローカルタイムに 0時0分が存在しない日は、その日の最初の時刻を返す
- * （例: TZ=Asia/Tokyo の 1948-05-02 は 1時0分）。年月日は正しいので、toWareki に戻すと元の和暦になる。
- *
+ * 和暦を西暦の年月日に変換する。
  * @throws {RangeError} 元号の範囲外の日付、存在しない日付、0年以下、整数でない値、未知の元号の場合
  */
-export function toSeireki(era: Era, year: number, month: number, day: number): Date {
+export function toSeireki(era: Era, year: number, month: number, day: number): SeirekiDate {
   const index = ERAS.findIndex((e) => e.name === era);
   if (index === -1) {
     throw new RangeError(`対応していない元号です: ${String(era)}`);
   }
   assertInteger("年", year);
-  assertInteger("月", month);
-  assertInteger("日", day);
   if (year < 1) {
     throw new RangeError(`年は1以上で指定してください: ${year}`);
   }
 
   const def = ERAS[index];
-  const ymd: YMD = { year: def.start.year + year - 1, month, day };
+  const seireki: SeirekiDate = { year: def.start.year + year - 1, month, day };
+  const text = `${era}${year}年${month}月${day}日`;
+  assertExistingDate(seireki, text);
 
-  // Date に渡すと 2月30日→3月2日 のように繰り上がってしまうため、先に自前で検証する
-  if (month < 1 || month > 12) {
-    throw new RangeError(`月は1〜12で指定してください: ${month}`);
-  }
-  if (day < 1 || day > daysInMonth(ymd.year, month)) {
-    throw new RangeError(`存在しない日付です: ${era}${year}年${month}月${day}日`);
-  }
-
-  const key = toKey(ymd);
+  const key = toKey(seireki);
   const next = ERAS[index + 1];
   if (key < toKey(def.start) || (next !== undefined && key >= toKey(next.start))) {
-    throw new RangeError(`${era}の範囲外の日付です: ${era}${year}年${month}月${day}日`);
+    throw new RangeError(`${era}の範囲外の日付です: ${text}`);
   }
 
-  return new Date(ymd.year, month - 1, day);
+  return seireki;
 }

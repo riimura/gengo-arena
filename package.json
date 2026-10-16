@@ -1,0 +1,17 @@
+{
+  "name": "gengo-arena",
+  "version": "0.1.0",
+  "private": true,
+  "description": "和暦⇔西暦変換ライブラリ",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

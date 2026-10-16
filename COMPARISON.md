@@ -1,5 +1,13 @@
 # 和暦⇔西暦変換 実装比較（1号機・2号機・3号機）
 
+> **これは比較した時点（2026-10-16）の記録です。** この比較をもとに2号機を採用しました。その後の変更は、このファイルには反映していません。
+>
+> - PR #1: 2号機をベースに、1号機のエラーメッセージと夏時間についての JSDoc を取り込んだ。`vitest.config.ts` で TZ を環境変数から指定できるようにした。
+> - PR #2: 西暦の日付を `Date` ではなく `SeirekiDate`（`{ year, month, day }`）で受け渡しする API に変えた（テストは160件）。
+> - PR #3: CI（`.github/workflows/ci.yml`）を追加した。
+>
+> 今の実装と判断の理由は [`NOTES.md`](NOTES.md) と [`TEST_CASES.md`](TEST_CASES.md) を見てください。
+
 対象ブランチ: `impl/wareki-1gouki` / `impl/wareki-2gouki` / `impl/wareki-3gouki`
 基準: `main`（d860741「和暦⇔西暦変換ライブラリのテストを追加（実装前）」）
 

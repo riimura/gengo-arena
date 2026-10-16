@@ -21,6 +21,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
+      # デモページ（web/）がビルドできることも確かめる
+      - run: npm run build
 
   test:
     name: test (TZ=${{ matrix.tz }})

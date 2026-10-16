@@ -55,6 +55,13 @@ const daysInMonth = (year: number, month: number): number => {
   return [4, 6, 9, 11].includes(month) ? 30 : 31;
 };
 
+/** 整数でなければ、どの項目がどんな値だったかをメッセージに入れて RangeError を投げる */
+const assertInteger = (label: string, value: number): void => {
+  if (!Number.isInteger(value)) {
+    throw new RangeError(`${label}は整数で指定してください: ${value}`);
+  }
+};
+
 /**
  * 西暦の日付を和暦に変換する。
  * @throws {RangeError} 大正より前の日付、または不正な Date の場合
@@ -74,7 +81,7 @@ export function toWareki(date: Date): Wareki {
     }
   }
 
-  throw new RangeError(`大正より前の日付には対応していません: ${ymd.year}-${ymd.month}-${ymd.day}`);
+  throw new RangeError(`対応範囲外の日付です（大正元年7月30日より前）: ${ymd.year}-${ymd.month}-${ymd.day}`);
 }
 
 /**
@@ -89,6 +96,10 @@ export function formatWareki(date: Date): string {
 
 /**
  * 和暦を西暦の Date（ローカルタイムの 0時0分0秒）に変換する。
+ *
+ * 注意: 夏時間が始まる日など、ローカルタイムに 0時0分が存在しない日は、その日の最初の時刻を返す
+ * （例: TZ=Asia/Tokyo の 1948-05-02 は 1時0分）。年月日は正しいので、toWareki に戻すと元の和暦になる。
+ *
  * @throws {RangeError} 元号の範囲外の日付、存在しない日付、0年以下、整数でない値、未知の元号の場合
  */
 export function toSeireki(era: Era, year: number, month: number, day: number): Date {
@@ -96,9 +107,9 @@ export function toSeireki(era: Era, year: number, month: number, day: number): D
   if (index === -1) {
     throw new RangeError(`対応していない元号です: ${String(era)}`);
   }
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-    throw new RangeError("年・月・日は整数で指定してください");
-  }
+  assertInteger("年", year);
+  assertInteger("月", month);
+  assertInteger("日", day);
   if (year < 1) {
     throw new RangeError(`年は1以上で指定してください: ${year}`);
   }
@@ -106,7 +117,11 @@ export function toSeireki(era: Era, year: number, month: number, day: number): D
   const def = ERAS[index];
   const ymd: YMD = { year: def.start.year + year - 1, month, day };
 
-  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(ymd.year, month)) {
+  // Date に渡すと 2月30日→3月2日 のように繰り上がってしまうため、先に自前で検証する
+  if (month < 1 || month > 12) {
+    throw new RangeError(`月は1〜12で指定してください: ${month}`);
+  }
+  if (day < 1 || day > daysInMonth(ymd.year, month)) {
     throw new RangeError(`存在しない日付です: ${era}${year}年${month}月${day}日`);
   }
 

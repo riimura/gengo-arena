@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="指でなぞると大正から令和まで日付が動き、和暦と西暦をその場で変換するデモ。">
 <title>元号タイムライン</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="theme-color" content="#eef0f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11152a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-title" content="元号">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@600;900&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
@@ -58,6 +64,7 @@
   <footer>
     変換には <a href="https://github.com/riimura/gengo-arena/blob/main/src/wareki.ts">src/wareki.ts</a> をそのまま使っています。
     ソース: <a href="https://github.com/riimura/gengo-arena">riimura/gengo-arena</a>
+    <p class="install">ホーム画面に追加すると、アプリのように全画面で開けて、電波がないときも使えます（iPhone は Safari の共有ボタン →「ホーム画面に追加」）。</p>
   </footer>
 </main>
 <script type="module" src="./main.ts"></script>

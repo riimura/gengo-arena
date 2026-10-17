@@ -68,6 +68,52 @@ ERA_STARTS.forEach(({ era, start }, i) => {
   $("ticks").appendChild(tick);
 });
 
+// ---- ハンコを押したときの振動 ----
+// Android などは Vibration API で振動させる。iPhone の Safari は Vibration API に対応していないため、
+// iOS 18 以降で「スイッチ型のチェックボックスを切り替えると触覚フィードバックが出る」ことを利用する。
+// どちらにも対応していない端末では何も起きない。
+const buzzToggle = $<HTMLInputElement>("buzz");
+const BUZZ_KEY = "gengo-timeline:buzz";
+try {
+  buzzToggle.checked = localStorage.getItem(BUZZ_KEY) !== "off";
+} catch {
+  // 保存できない環境では、毎回オンから始める
+}
+buzzToggle.addEventListener("change", () => {
+  try {
+    localStorage.setItem(BUZZ_KEY, buzzToggle.checked ? "on" : "off");
+  } catch {
+    // 保存できなくても切り替え自体はできる
+  }
+});
+
+const hapticLabel = (() => {
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.setAttribute("switch", "");
+  input.id = "haptic-switch";
+  input.tabIndex = -1;
+  const label = document.createElement("label");
+  label.htmlFor = input.id;
+  label.className = "haptic-switch";
+  label.setAttribute("aria-hidden", "true");
+  label.append(input);
+  document.body.append(label);
+  return label;
+})();
+
+const canVibrate = typeof navigator.vibrate === "function";
+
+function buzz(kind: "改元" | "元年"): void {
+  if (!buzzToggle.checked) return;
+  if (canVibrate) {
+    navigator.vibrate(kind === "改元" ? [18, 70, 30] : 16);
+    return;
+  }
+  hapticLabel.click();
+  if (kind === "改元") setTimeout(() => hapticLabel.click(), 110);
+}
+
 // ---- 表示 ----
 const pad2 = (n: number) => String(n).padStart(2, "0");
 let lastEra: Era | null = null;
@@ -88,10 +134,12 @@ function show(n: number, { stamp = true } = {}): void {
   const eraChanged = lastEra !== null && w.era !== lastEra;
   const enteredGannen = lastEra !== null && gannen && !lastGannen;
   if (stamp && (eraChanged || enteredGannen)) {
-    seal.textContent = eraChanged ? "改元" : "元年";
+    const kind = eraChanged ? "改元" : "元年";
+    seal.textContent = kind;
     seal.classList.remove("show");
     void seal.offsetWidth; // アニメーションをやり直すため
     seal.classList.add("show");
+    buzz(kind);
   } else if (!gannen && w.era === lastEra) {
     seal.classList.remove("show");
   }

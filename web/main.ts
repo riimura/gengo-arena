@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { fromDate, toSeireki, toWareki, type Era, type SeirekiDate } from "../src/wareki";
 
 // 対応範囲は大正の開始日から。終わりはデモ用に区切っている。
@@ -181,3 +182,10 @@ document.querySelectorAll<HTMLButtonElement>("[data-try]").forEach((button) => {
 
 convert();
 show(TODAY, { stamp: false });
+
+// ---- オフライン対応（公開用のビルドだけ。npm run dev では登録しない） ----
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((error) => console.warn("サービスワーカーを登録できませんでした", error));
+  });
+}
